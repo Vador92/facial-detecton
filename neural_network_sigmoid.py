@@ -7,10 +7,6 @@ import numpy as np
 # from sklearn.metrics import accuracy_score
 # This file is for the sigmoid function and triple layer neural network
 
-class Sigmoid:
-    def __init__(self):
-        pass
-
 class SigmoidNeuralNetwork:
     def __init__(self, input_size, hidden1_size, hidden2_size, output_size, learning_rate=0.01):
         """
