@@ -342,7 +342,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig(f'{name}_sigmoid_results.png')
+    plt.savefig(f'{name}_reLu_results.png')
     plt.show()
     
     return accuracies, std_devs, training_times
