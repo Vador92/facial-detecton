@@ -272,7 +272,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
         run_accuracies = []
         run_times = []
         
-        # Run 3 times with different random samples (fewer runs to save time)
+        # Run 3 times with different random samples
         for run in range(3):
             # Randomly select training samples
             indices = np.random.choice(len(X_train), n_samples, replace=False)
