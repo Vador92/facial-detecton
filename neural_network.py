@@ -326,7 +326,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     plt.figure(figsize=(12, 5))
     
     # Accuracy plot
-    plt.subplot(1, 2, 1)
+    plt.subplot(1, 2, 2)
     plt.errorbar(training_percentages, np.array(accuracies) * 100, yerr=np.array(std_devs) * 100, capsize=5)
     plt.xlabel('Training Data Percentage (%)')
     plt.ylabel('Test Accuracy (%)')
@@ -334,7 +334,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     plt.grid(True)
     
     # Training time plot
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 2, 1)
     plt.plot(training_percentages, training_times)
     plt.xlabel('Training Data Percentage (%)')
     plt.ylabel('Training Time (s)')
@@ -342,6 +342,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     plt.grid(True)
     
     plt.tight_layout()
+    plt.savefig(f'{name}_sigmoid_results.png')
     plt.show()
     
     return accuracies, std_devs, training_times
