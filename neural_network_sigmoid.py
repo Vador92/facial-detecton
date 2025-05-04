@@ -1,197 +1,398 @@
-import matplotlib.pyplot as plt
-import sklearn.metrics as metrics
-import os
-import time
+import torch
+import torch.nn as nn
+import torch.optim as optim
 import numpy as np
+import time
+import matplotlib.pyplot as plt
+import random
+import os
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
 # from sklearn.metrics import accuracy_score
 # This file is for the sigmoid function and triple layer neural network
 
-class SigmoidNeuralNetwork:
-    def __init__(self, input_size, hidden1_size, hidden2_size, output_size, learning_rate=0.01):
-        """
-        Initialize a 3-layer neural network with sigmoid activation functions
+class ImageDataset(Dataset):
+    """
+    Custom PyTorch Dataset for loading digit/face images
+    """
+    def __init__(self, data, labels):
+        # Convert numpy arrays to PyTorch tensors
+        # FloatTensor for input features, LongTensor for class labels
+        self.data = torch.FloatTensor(data)
+        self.labels = torch.LongTensor(labels)
         
-        Args:
-            input_size: Number of input features
-            hidden1_size: Number of neurons in first hidden layer
-            hidden2_size: Number of neurons in second hidden layer
-            output_size: Number of output classes
-            learning_rate: Learning rate for gradient descent
-        """
-        # Initialize weights with Xavier/Glorot initialization
-        self.weights1 = np.random.randn(input_size, hidden1_size) * np.sqrt(2 / (input_size + hidden1_size))
-        self.bias1 = np.zeros((1, hidden1_size))
-        
-        self.weights2 = np.random.randn(hidden1_size, hidden2_size) * np.sqrt(2 / (hidden1_size + hidden2_size))
-        self.bias2 = np.zeros((1, hidden2_size))
-        
-        self.weights3 = np.random.randn(hidden2_size, output_size) * np.sqrt(2 / (hidden2_size + output_size))
-        self.bias3 = np.zeros((1, output_size))
-        
-        self.learning_rate = learning_rate
-        
-        # For momentum
-        self.velocity_w1 = np.zeros_like(self.weights1)
-        self.velocity_b1 = np.zeros_like(self.bias1)
-        self.velocity_w2 = np.zeros_like(self.weights2)
-        self.velocity_b2 = np.zeros_like(self.bias2)
-        self.velocity_w3 = np.zeros_like(self.weights3)
-        self.velocity_b3 = np.zeros_like(self.bias3)
-        self.momentum = 0.9
+    def __len__(self):
+        """Return the total number of samples in the dataset"""
+        return len(self.data)
     
-    def sigmoid(self, x):
-        """Sigmoid activation function with numerical stability"""
-        return 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+    def __getitem__(self, idx):
+        """Return a specific sample and its label for the given index"""
+        return self.data[idx], self.labels[idx]
+
+
+class ThreeLayerSigmoidNN(nn.Module):
+    """
+    Three-layer Neural Network with Sigmoid activation
     
-    def sigmoid_derivative(self, x):
-        """Derivative of sigmoid function"""
-        return x * (1 - x)
-    
-    def forward(self, X):
+    Architecture:
+    - Input layer: Takes flattened pixel values (input_size nodes)
+    - Hidden layer 1: hidden1_size nodes with Sigmoid activation
+    - Hidden layer 2: hidden2_size nodes with Sigmoid activation
+    - Output layer: output_size nodes (10 for digits, 2 for faces)
+    """
+    def __init__(self, input_size, hidden1_size, hidden2_size, output_size):
+        """Initialize the network architecture"""
+        super(ThreeLayerSigmoidNN, self).__init__()
+        
+        # First hidden layer
+        self.layer1 = nn.Linear(input_size, hidden1_size)
+        self.activation1 = nn.Sigmoid()
+        
+        # Second hidden layer
+        self.layer2 = nn.Linear(hidden1_size, hidden2_size)
+        self.activation2 = nn.Sigmoid()
+        
+        # Output layer (no activation - will be handled by loss function)
+        self.output_layer = nn.Linear(hidden2_size, output_size)
+        
+        # Initialize weights using Xavier/Glorot initialization
+        nn.init.xavier_uniform_(self.layer1.weight)
+        nn.init.xavier_uniform_(self.layer2.weight)
+        nn.init.xavier_uniform_(self.output_layer.weight)
+        
+    def forward(self, x):
         """
         Forward pass through the network
         
         Args:
-            X: Input data (batch_size, input_size)
+            x: Input tensor with shape [batch_size, input_size]
             
         Returns:
-            Output activations
+            Output tensor with shape [batch_size, output_size]
         """
-        # First hidden layer with sigmoid
-        self.z1 = np.dot(X, self.weights1) + self.bias1
-        self.a1 = self.sigmoid(self.z1)
+        # Apply first hidden layer and activation
+        x = self.activation1(self.layer1(x))
         
-        # Second hidden layer with sigmoid
-        self.z2 = np.dot(self.a1, self.weights2) + self.bias2
-        self.a2 = self.sigmoid(self.z2)
+        # Apply second hidden layer and activation
+        x = self.activation2(self.layer2(x))
         
-        # Output layer with sigmoid
-        self.z3 = np.dot(self.a2, self.weights3) + self.bias3
-        self.a3 = self.sigmoid(self.z3)
+        # Apply output layer (no activation applied here)
+        x = self.output_layer(x)
         
-        return self.a3
+        return x
+
+
+def load_data(folder_path, img_width, img_height):
+    """
+    Load and parse data
+
+    Args:
+        folder_path: Path to the data directory (digitdata or facedata)
+        img_width: Width of the images in pixels
+        img_height: Height of the images in pixels
+        
+    Returns:
+        train_imgs: Training images as numpy array
+        train_labels: Training labels as numpy array
+        test_imgs: Test images as numpy array
+        test_labels: Test labels as numpy array
+    """
+    def parse_img(lines):
+        """Parse image lines into binary pixel values"""
+        if len(lines) != img_height:
+            raise ValueError(f"Expected {img_height} lines per image, got {len(lines)}")
+        return [1 if ch != ' ' else 0 for line in lines for ch in line.strip('\n')]
     
-    def backward(self, X, y, output):
-        """
-        Backward pass with momentum
-        
-        Args:
-            X: Input data (batch_size, input_size)
-            y: True labels (batch_size,)
-            output: Predicted probabilities from forward pass (batch_size, output_size)
-        """
-        batch_size = X.shape[0]
-        
-        # Convert y to one-hot encoding
-        y_one_hot = np.zeros((batch_size, output.shape[1]))
-        y_one_hot[np.arange(batch_size), y] = 1
-        
-        # Output layer error
-        delta3 = (output - y_one_hot) * self.sigmoid_derivative(output)
-        
-        # Second hidden layer error
-        delta2 = np.dot(delta3, self.weights3.T) * self.sigmoid_derivative(self.a2)
-        
-        # First hidden layer error
-        delta1 = np.dot(delta2, self.weights2.T) * self.sigmoid_derivative(self.a1)
-        
-        # Calculate gradients
-        dW3 = np.dot(self.a2.T, delta3) / batch_size
-        db3 = np.sum(delta3, axis=0, keepdims=True) / batch_size
-        dW2 = np.dot(self.a1.T, delta2) / batch_size
-        db2 = np.sum(delta2, axis=0, keepdims=True) / batch_size
-        dW1 = np.dot(X.T, delta1) / batch_size
-        db1 = np.sum(delta1, axis=0, keepdims=True) / batch_size
-        
-        # Update with momentum
-        self.velocity_w3 = self.momentum * self.velocity_w3 - self.learning_rate * dW3
-        self.velocity_b3 = self.momentum * self.velocity_b3 - self.learning_rate * db3
-        self.velocity_w2 = self.momentum * self.velocity_w2 - self.learning_rate * dW2
-        self.velocity_b2 = self.momentum * self.velocity_b2 - self.learning_rate * db2
-        self.velocity_w1 = self.momentum * self.velocity_w1 - self.learning_rate * dW1
-        self.velocity_b1 = self.momentum * self.velocity_b1 - self.learning_rate * db1
-        
-        self.weights3 += self.velocity_w3
-        self.bias3 += self.velocity_b3
-        self.weights2 += self.velocity_w2
-        self.bias2 += self.velocity_b2
-        self.weights1 += self.velocity_w1
-        self.bias1 += self.velocity_b1
+    # Set file names based on dataset type
+    if "digitdata" in folder_path:
+        train_img_file = "trainingimages"
+        train_lbl_file = "traininglabels"
+        test_img_file = "testimages"
+        test_lbl_file = "testlabels"
+    else:
+        train_img_file = "facedatatrain"
+        train_lbl_file = "facedatatrainlabels"
+        test_img_file = "facedatatest"
+        test_lbl_file = "facedatatestlabels"
     
-    def train(self, X, y, epochs=100, batch_size=32, verbose=True):
-        """
-        Train the neural network
-        
-        Args:
-            X: Training data (num_samples, input_size)
-            y: Training labels (num_samples,)
-            epochs: Number of training epochs
-            batch_size: Size of mini-batches
-            verbose: Whether to print progress
-        """
-        num_samples = X.shape[0]
-        losses = []
-        
-        for epoch in range(epochs):
-            # Shuffle data
-            indices = np.random.permutation(num_samples)
-            X_shuffled = X[indices]
-            y_shuffled = y[indices]
-            
-            # Mini-batch gradient descent
-            for i in range(0, num_samples, batch_size):
-                end = min(i + batch_size, num_samples)
-                X_batch = X_shuffled[i:end]
-                y_batch = y_shuffled[i:end]
-                
-                # Forward pass
-                output = self.forward(X_batch)
-                
-                # Backward pass
-                self.backward(X_batch, y_batch, output)
-            
-            # Compute loss for monitoring (optional)
-            if verbose and epoch % 5 == 0:
-                output = self.forward(X)
-                y_one_hot = np.zeros((num_samples, output.shape[1]))
-                y_one_hot[np.arange(num_samples), y] = 1
-                loss = -np.sum(y_one_hot * np.log(np.clip(output, 1e-15, 1.0))) / num_samples
-                losses.append(loss)
-                
-                # Calculate accuracy on training data
-                predictions = np.argmax(output, axis=1)
-                accuracy = np.mean(predictions == y)
-                
-                print(f"Epoch {epoch}, Loss: {loss:.4f}, Training Accuracy: {accuracy:.4f}")
-        
-        return losses
+    # Load raw data from files
+    with open(os.path.join(folder_path, train_img_file), 'r') as f:
+        raw_imgs = f.readlines()
+    with open(os.path.join(folder_path, train_lbl_file), 'r') as f:
+        train_labels = [int(l.strip()) for l in f.readlines()]
+    with open(os.path.join(folder_path, test_img_file), 'r') as f:
+        raw_test_imgs = f.readlines()
+    with open(os.path.join(folder_path, test_lbl_file), 'r') as f:
+        test_labels = [int(l.strip()) for l in f.readlines()]
     
-    def predict(self, X):
-        """
-        Make predictions for given inputs
-        
-        Args:
-            X: Input data (num_samples, input_size)
-            
-        Returns:
-            Predicted class labels
-        """
-        output = self.forward(X)
-        return np.argmax(output, axis=1)
+    # Parse raw images into binary pixel values
+    train_imgs = [parse_img(raw_imgs[i:i+img_height]) for i in range(0, len(raw_imgs), img_height)]
+    test_imgs = [parse_img(raw_test_imgs[i:i+img_height]) for i in range(0, len(raw_test_imgs), img_height)]
     
-    def evaluate(self, X, y):
-        """
-        Evaluate accuracy on given data
+    return np.array(train_imgs), np.array(train_labels), np.array(test_imgs), np.array(test_labels)
+
+
+def train_model(model, train_loader, criterion, optimizer, device, epochs=10):
+    """
+    Train the model
+    
+    Args:
+        model: The neural network model to train
+        train_loader: DataLoader for training data
+        criterion: Loss function
+        optimizer: Optimization algorithm
+        device: Device to train on (CPU or GPU)
+        epochs: Number of training epochs
         
-        Args:
-            X: Input data
-            y: True labels
+    Returns:
+        model: Trained model
+        losses: List of loss values per epoch
+        training_time: Total training time in seconds
+    """
+    model.train()  # Set model to training mode
+    losses = []
+    start_time = time.time()
+    
+    for epoch in range(epochs):
+        running_loss = 0.0
+        
+        # Iterate over mini-batches
+        for inputs, targets in train_loader:
+            # Move data to device (CPU/GPU)
+            inputs, targets = inputs.to(device), targets.to(device)
             
-        Returns:
-            Accuracy score
-        """
-        predictions = self.predict(X)
-        return metrics.accuracy_score(y, predictions)
+            # Zero the gradients from previous batch
+            optimizer.zero_grad()
+            
+            # Forward pass
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            
+            # Backward pass and optimization
+            loss.backward()      # Compute gradients
+            optimizer.step()     # Update weights
+            
+            # Accumulate batch loss
+            running_loss += loss.item()
+            
+        # Calculate average loss for the epoch
+        epoch_loss = running_loss / len(train_loader)
+        losses.append(epoch_loss)
+        
+        # Print progress every 5 epochs
+        if (epoch + 1) % 5 == 0:
+            print(f'Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}')
+    
+    # Calculate total training time
+    training_time = time.time() - start_time
+    return model, losses, training_time
+
+
+def evaluate_model(model, test_loader, device):
+    """
+    Evaluate the model
+    
+    Args:
+        model: The neural network model to evaluate
+        test_loader: DataLoader for test data
+        device: Device to evaluate on (CPU or GPU)
+        
+    Returns:
+        accuracy: Classification accuracy on test data
+    """
+    model.eval()  # Set model to evaluation mode
+    correct = 0
+    total = 0
+    
+    # Disable gradient calculation for efficiency
+    with torch.no_grad():
+        for inputs, targets in test_loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            # Forward pass
+            outputs = model(inputs)
+            
+            # Get predicted class (highest probability)
+            _, predicted = torch.max(outputs.data, 1)
+            
+            # Count correct predictions
+            total += targets.size(0)
+            correct += (predicted == targets).sum().item()
+    
+    # Calculate accuracy
+    accuracy = correct / total
+    return accuracy
+
+
+def run_experiment(data_type='digits', iterations=5):
+    """
+    Run experiment with different percentages of training data
+    
+    Args:
+        data_type: Type of data to use ('digits' or 'faces')
+        iterations: Number of iterations for each training percentage
+        
+    Returns:
+        Dictionary containing experiment results
+    """
+    train_percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    np.random.seed(42)
+    random.seed(42)
+    
+    # Set device (GPU if available, otherwise CPU)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    
+    # Load data based on data type
+    if data_type == 'digits':
+        folder_path = 'data/digitdata'
+        img_width, img_height = 28, 28
+        train_data, train_labels, test_data, test_labels = load_data(folder_path, img_width, img_height)
+        input_size = img_width * img_height  # 28x28 = 784 input features
+        output_size = 10  # 10 digits (0-9)
+    else:  # faces
+        folder_path = 'data/facedata'
+        img_width, img_height = 60, 70
+        train_data, train_labels, test_data, test_labels = load_data(folder_path, img_width, img_height)
+        input_size = img_width * img_height  # 60x70 = 4200 input features
+        output_size = 2  # Binary classification (face or not face)
+    
+    # Create datasets
+    train_dataset = ImageDataset(train_data, train_labels)
+    test_dataset = ImageDataset(test_data, test_labels)
+    
+    # Model hyperparameters
+    hidden1_size = 128
+    hidden2_size = 64
+    batch_size = 32
+    learning_rate = 0.01  # Learning rate for sigmoid
+    epochs = 20
+    
+    # Results storage
+    training_times = []
+    accuracies = []
+    accuracy_stds = []
+    
+    # Main experiment loop
+    for percentage in train_percentages:
+        print(f"\nTraining with {percentage*100}% of the training data")
+        
+        # Calculate number of training examples to use
+        n_train = int(len(train_dataset) * percentage)
+        
+        # Results for current percentage
+        cur_times = []
+        cur_accuracies = []
+        
+        # Run multiple iterations with different random samples
+        for iteration in range(iterations):
+            print(f"Iteration {iteration+1}/{iterations}")
+            
+            # Randomly sample training data
+            indices = torch.randperm(len(train_dataset))[:n_train]
+            sampled_train_dataset = Subset(train_dataset, indices)
+            
+            # Create data loaders
+            train_loader = DataLoader(sampled_train_dataset, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size)
+            
+            # Initialize model
+            model = ThreeLayerSigmoidNN(input_size, hidden1_size, hidden2_size, output_size).to(device)
+            
+            # Loss function and optimizer
+            criterion = nn.CrossEntropyLoss()
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            
+            # Train model
+            _, _, training_time = train_model(model, train_loader, criterion, optimizer, device, epochs)
+            cur_times.append(training_time)
+            
+            # Evaluate model
+            accuracy = evaluate_model(model, test_loader, device)
+            cur_accuracies.append(accuracy)
+            
+            print(f"Accuracy: {accuracy:.4f}, Training time: {training_time:.2f}s")
+        
+        # Calculate and store average results
+        training_times.append(np.mean(cur_times))
+        accuracies.append(np.mean(cur_accuracies))
+        accuracy_stds.append(np.std(cur_accuracies))
+        
+        print(f"Average accuracy: {np.mean(cur_accuracies):.4f} ± {np.std(cur_accuracies):.4f}")
+        print(f"Average training time: {np.mean(cur_times):.2f}s")
+    
+    # Plot results
+    plot_results(train_percentages, training_times, accuracies, accuracy_stds, data_type)
+    
+    return {
+        'train_percentages': train_percentages,
+        'training_times': training_times,
+        'accuracies': accuracies,
+        'accuracy_stds': accuracy_stds
+    }
+
+
+def plot_results(train_percentages, training_times, accuracies, accuracy_stds, data_type):
+    """
+    Plot training time and accuracy results
+    
+    Args:
+        train_percentages: List of training data percentages
+        training_times: List of average training times
+        accuracies: List of average accuracies
+        accuracy_stds: List of accuracy standard deviations
+        data_type: Type of data ('digits' or 'faces')
+    """
+    percentages = [p * 100 for p in train_percentages]
+    
+    plt.figure(figsize=(12, 5))
+    
+    # Plot training time
+    plt.subplot(1, 2, 1)
+    plt.plot(percentages, training_times, 'o-', color='blue')
+    plt.xlabel('Percentage of Training Data (%)')
+    plt.ylabel('Training Time (s)')
+    plt.title(f'Training Time vs. Training Data Size ({data_type})')
+    plt.grid(True)
+    
+    # Plot accuracy with error bars (± standard deviation)
+    plt.subplot(1, 2, 2)
+    plt.errorbar(percentages, accuracies, yerr=accuracy_stds, fmt='o-', color='green', capsize=5)
+    plt.xlabel('Percentage of Training Data (%)')
+    plt.ylabel('Accuracy')
+    plt.title(f'Accuracy vs. Training Data Size ({data_type})')
+    plt.grid(True)
+    
+    # Save and display the figure
+    plt.tight_layout()
+    plt.savefig(f'{data_type}_sigmoid_results.png')
+    plt.show()
+
+
+def main():
+    """Main function to run the experiment"""
+    print("PyTorch Neural Network with Sigmoid Activation for Image Classification")
+    
+    # Check if data directory exists
+    if not os.path.exists('data'):
+        print("Error: 'data' directory not found.")
+        return
+    
+    # Run experiment for digits
+    print("\n=== Digit Classification ===")
+    digit_results = run_experiment(data_type='digits')
+    
+    # Run experiment for faces
+    print("\n=== Face Classification ===")
+    face_results = run_experiment(data_type='faces')
+    
+    print("\nExperiments completed!")
+
+
+if __name__ == "__main__":
+    main()
 
     
