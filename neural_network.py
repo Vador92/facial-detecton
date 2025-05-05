@@ -1,6 +1,7 @@
 """
 Group: Varun Doreswamy, Seth Yeh, Nicholas Kushnir
 """
+
 import os
 import time
 import numpy as np

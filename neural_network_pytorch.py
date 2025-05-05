@@ -1,3 +1,7 @@
+"""
+Group: Varun Doreswamy, Seth Yeh, Nicholas Kushnir
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim

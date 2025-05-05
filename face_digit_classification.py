@@ -1,11 +1,13 @@
+"""
+Group: Varun Doreswamy, Seth Yeh, Nicholas Kushnir
+"""
+
 import os
 import time
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 
-# load Files
 def load_data(folder_path, img_width, img_height):
     def parse_img(lines):
         if len(lines) != img_height:
@@ -39,8 +41,6 @@ def load_data(folder_path, img_width, img_height):
 
     return np.array(train_imgs), np.array(train_labels), np.array(test_imgs), np.array(test_labels)
 
-## testing for loading data
-
 
 def test_dataset(name, folder, img_size):
     print(f"\n--- Data Loading Test: {name} ---")
@@ -55,8 +55,6 @@ def test_dataset(name, folder, img_size):
     plt.show()
 
 
-
-# perceptron
 class Perceptron:
     def __init__(self, num_features: int, num_classes: int):
         self.weights = np.zeros((num_classes, num_features))
@@ -99,7 +97,6 @@ def run_perceptron_experiment(name, folder, img_size, num_classes):
         std_acc.append(np.std(accs))
         times.append(total_time / 5)
 
-    # Plot results
     x_vals = [int(p * 100) for p in portions]
 
     plt.figure(figsize=(12, 5))
