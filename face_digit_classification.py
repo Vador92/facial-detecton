@@ -117,7 +117,7 @@ def run_perceptron_experiment(name, folder, img_size, num_classes):
     plt.title(f"Accuracy vs. Training Data Size ({name.lower()})")
 
     plt.tight_layout()
-    plt.savefig(f"perceptron_{name.lower()}_results.png")
+    plt.savefig(f"extras/results/perceptron_{name.lower()}_results.png")
     plt.show()
 
 if __name__ == "__main__":

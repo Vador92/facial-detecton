@@ -39,16 +39,6 @@ def load_data(folder_path, img_width, img_height):
 
 class ImprovedNeuralNetwork:
     def __init__(self, input_size, hidden1_size, hidden2_size, output_size, learning_rate=0.001):
-        """
-        Initialize a 3-layer neural network with improved initialization
-        
-        Args:
-            input_size: Number of input features
-            hidden1_size: Number of neurons in first hidden layer
-            hidden2_size: Number of neurons in second hidden layer
-            output_size: Number of output classes
-            learning_rate: Learning rate for gradient descent
-        """
         # Xavier/Glorot initialization for better convergence
         self.weights1 = np.random.randn(input_size, hidden1_size) * np.sqrt(2 / (input_size + hidden1_size))
         self.bias1 = np.zeros((1, hidden1_size))
@@ -71,36 +61,16 @@ class ImprovedNeuralNetwork:
         self.momentum = 0.9
     
     def relu(self, x):
-        """ReLU activation function"""
         return np.maximum(0, x)
     
     def relu_derivative(self, x):
-        """Derivative of ReLU function"""
         return np.where(x > 0, 1, 0)
     
-    def sigmoid(self, x):
-        """Sigmoid activation function"""
-        return 1 / (1 + np.exp(-np.clip(x, -500, 500)))  # Clip to avoid overflow
-    
-    def sigmoid_derivative(self, x):
-        """Derivative of sigmoid function"""
-        return x * (1 - x)
-    
     def softmax(self, x):
-        """Softmax activation function for output layer"""
         exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))  # Subtract max for numerical stability
         return exp_x / np.sum(exp_x, axis=1, keepdims=True)
     
     def forward(self, X):
-        """
-        Forward pass through the network
-        
-        Args:
-            X: Input data (batch_size, input_size)
-            
-        Returns:
-            Output activations
-        """
         # First hidden layer with ReLU
         self.z1 = np.dot(X, self.weights1) + self.bias1
         self.a1 = self.relu(self.z1)
@@ -116,30 +86,17 @@ class ImprovedNeuralNetwork:
         return self.a3
     
     def backward(self, X, y, output):
-        """
-        Backward pass with momentum
-        
-        Args:
-            X: Input data (batch_size, input_size)
-            y: True labels (batch_size,)
-            output: Predicted probabilities from forward pass (batch_size, output_size)
-        """
         batch_size = X.shape[0]
         
-        # Convert y to one-hot encoding
         y_one_hot = np.zeros((batch_size, output.shape[1]))
         y_one_hot[np.arange(batch_size), y] = 1
         
-        # Output layer error
         delta3 = output - y_one_hot
         
-        # Second hidden layer error
         delta2 = np.dot(delta3, self.weights3.T) * self.relu_derivative(self.z2)
         
-        # First hidden layer error
         delta1 = np.dot(delta2, self.weights2.T) * self.relu_derivative(self.z1)
         
-        # Calculate gradients
         dW3 = np.dot(self.a2.T, delta3) / batch_size
         db3 = np.sum(delta3, axis=0, keepdims=True) / batch_size
         dW2 = np.dot(self.a1.T, delta2) / batch_size
@@ -147,7 +104,6 @@ class ImprovedNeuralNetwork:
         dW1 = np.dot(X.T, delta1) / batch_size
         db1 = np.sum(delta1, axis=0, keepdims=True) / batch_size
         
-        # Update with momentum
         self.velocity_w3 = self.momentum * self.velocity_w3 - self.learning_rate * dW3
         self.velocity_b3 = self.momentum * self.velocity_b3 - self.learning_rate * db3
         self.velocity_w2 = self.momentum * self.velocity_w2 - self.learning_rate * dW2
@@ -163,16 +119,6 @@ class ImprovedNeuralNetwork:
         self.bias1 += self.velocity_b1
     
     def train(self, X, y, epochs=100, batch_size=32, verbose=True):
-        """
-        Train the neural network
-        
-        Args:
-            X: Training data (num_samples, input_size)
-            y: Training labels (num_samples,)
-            epochs: Number of training epochs
-            batch_size: Size of mini-batches
-            verbose: Whether to print progress
-        """
         num_samples = X.shape[0]
         losses = []
         
@@ -182,19 +128,15 @@ class ImprovedNeuralNetwork:
             X_shuffled = X[indices]
             y_shuffled = y[indices]
             
-            # Mini-batch gradient descent
             for i in range(0, num_samples, batch_size):
                 end = min(i + batch_size, num_samples)
                 X_batch = X_shuffled[i:end]
                 y_batch = y_shuffled[i:end]
                 
-                # Forward pass
                 output = self.forward(X_batch)
                 
-                # Backward pass
                 self.backward(X_batch, y_batch, output)
             
-            # Compute loss for monitoring (optional)
             if verbose and epoch % 5 == 0:
                 output = self.forward(X)
                 y_one_hot = np.zeros((num_samples, output.shape[1]))
@@ -202,7 +144,6 @@ class ImprovedNeuralNetwork:
                 loss = -np.sum(y_one_hot * np.log(np.clip(output, 1e-15, 1.0))) / num_samples
                 losses.append(loss)
                 
-                # Calculate accuracy on training data
                 predictions = np.argmax(output, axis=1)
                 accuracy = np.mean(predictions == y)
                 
@@ -211,49 +152,19 @@ class ImprovedNeuralNetwork:
         return losses
     
     def predict(self, X):
-        """
-        Make predictions for given inputs
-        
-        Args:
-            X: Input data (num_samples, input_size)
-            
-        Returns:
-            Predicted class labels
-        """
         output = self.forward(X)
         return np.argmax(output, axis=1)
     
     def evaluate(self, X, y):
-        """
-        Evaluate accuracy on given data
-        
-        Args:
-            X: Input data
-            y: True labels
-            
-        Returns:
-            Accuracy score
-        """
         predictions = self.predict(X)
         return accuracy_score(y, predictions)
 
 def test_neural_network(name, folder, img_size, num_classes, training_percentages=None):
-    """
-    Test improved neural network with different percentages of training data
-    
-    Args:
-        name: Dataset name
-        folder: Data folder path
-        img_size: Image dimensions (width, height)
-        num_classes: Number of output classes
-        training_percentages: List of percentages of training data to use
-    """
     if training_percentages is None:
         training_percentages = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     
     print(f"\n--- Improved Neural Network Test: {name} ---")
     
-    # Load data
     X_train, y_train, X_test, y_test = load_data(folder, *img_size)
     
     # Results storage
@@ -261,48 +172,39 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     training_times = []
     std_devs = []
     
-    # For each percentage
     for percentage in training_percentages:
         print(f"\nTraining with {percentage}% of data")
         
-        # Number of samples to use
         n_samples = int(len(X_train) * percentage / 100)
         
-        # Storage for multiple runs
         run_accuracies = []
         run_times = []
         
-        # Run 3 times with different random samples
         for run in range(3):
-            # Randomly select training samples
             indices = np.random.choice(len(X_train), n_samples, replace=False)
             X_train_subset = X_train[indices]
             y_train_subset = y_train[indices]
             
-            # Define hyperparameters based on the dataset
             if "digit" in name.lower():
                 hidden1_size = 128  # Larger network
                 hidden2_size = 64
                 epochs = 50        # More epochs
                 batch_size = 32
                 learning_rate = 0.001  # Lower learning rate
-            else:  # For faces
+            else: 
                 hidden1_size = 64
                 hidden2_size = 32
                 epochs = 30
                 batch_size = 16
                 learning_rate = 0.001
             
-            # Initialize model
             input_size = X_train_subset.shape[1]
             model = ImprovedNeuralNetwork(input_size, hidden1_size, hidden2_size, num_classes, learning_rate)
             
-            # Train model
             start_time = time.time()
             model.train(X_train_subset, y_train_subset, epochs=epochs, batch_size=batch_size, verbose=(run==0))
             train_time = time.time() - start_time
             
-            # Evaluate model
             accuracy = model.evaluate(X_test, y_test)
             
             run_accuracies.append(accuracy)
@@ -342,14 +244,14 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
     plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig(f'{name}_reLu_results.png')
+    plt.savefig(f'extras/results/{name}_reLu_results.png')
     plt.show()
     
     return accuracies, std_devs, training_times
 
 if __name__ == "__main__":
-    # Test neural network on digits dataset
+    # digits dataset
     digits_results = test_neural_network("Digits", "data/digitdata", (28, 28), 10)
     
-    # Test neural network on faces dataset
+    # faces dataset
     faces_results = test_neural_network("Faces", "data/facedata", (60, 70), 2)

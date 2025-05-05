@@ -9,36 +9,19 @@ import os
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
 class ImageDataset(Dataset):
-    """
-    Custom PyTorch Dataset for loading digit/face images
-    """
     def __init__(self, data, labels):
-        # Convert numpy arrays to PyTorch tensors
-        # FloatTensor for input features, LongTensor for class labels
         self.data = torch.FloatTensor(data)
         self.labels = torch.LongTensor(labels)
         
     def __len__(self):
-        """Return the total number of samples in the dataset"""
         return len(self.data)
     
     def __getitem__(self, idx):
-        """Return a specific sample and its label for the given index"""
         return self.data[idx], self.labels[idx]
 
 
 class ThreeLayerNN(nn.Module):
-    """
-    Three-layer Neural Network (input layer, 2 hidden layers, output layer)
-    
-    Architecture:
-    - Input layer: Takes flattened pixel values (input_size nodes)
-    - Hidden layer 1: hidden1_size nodes with ReLU activation
-    - Hidden layer 2: hidden2_size nodes with ReLU activation
-    - Output layer: output_size nodes (10 for digits, 2 for faces)
-    """
     def __init__(self, input_size, hidden1_size, hidden2_size, output_size):
-        """Initialize the network architecture"""
         super(ThreeLayerNN, self).__init__()
         
         # First hidden layer
@@ -53,15 +36,6 @@ class ThreeLayerNN(nn.Module):
         self.output_layer = nn.Linear(hidden2_size, output_size)
         
     def forward(self, x):
-        """
-        Forward pass through the network
-        
-        Args:
-            x: Input tensor with shape [batch_size, input_size]
-            
-        Returns:
-            Output tensor with shape [batch_size, output_size]
-        """
         # Apply first hidden layer and activation
         x = self.activation1(self.layer1(x))
         
@@ -70,32 +44,15 @@ class ThreeLayerNN(nn.Module):
         
         # Apply output layer (no activation applied here)
         x = self.output_layer(x)
-        
         return x
 
 
 def load_data(folder_path, img_width, img_height):
-    """
-    Load and parse data
-
-    Args:
-        folder_path: Path to the data directory (digitdata or facedata)
-        img_width: Width of the images in pixels
-        img_height: Height of the images in pixels
-        
-    Returns:
-        train_imgs: Training images as numpy array
-        train_labels: Training labels as numpy array
-        test_imgs: Test images as numpy array
-        test_labels: Test labels as numpy array
-    """
     def parse_img(lines):
-        """Parse image lines into binary pixel values"""
         if len(lines) != img_height:
             raise ValueError(f"Expected {img_height} lines per image, got {len(lines)}")
         return [1 if ch != ' ' else 0 for line in lines for ch in line.strip('\n')]
     
-    # Set file names based on dataset type
     if "digitdata" in folder_path:
         train_img_file = "trainingimages"
         train_lbl_file = "traininglabels"
@@ -125,22 +82,6 @@ def load_data(folder_path, img_width, img_height):
 
 
 def train_model(model, train_loader, criterion, optimizer, device, epochs=10):
-    """
-    Train the model
-    
-    Args:
-        model: The neural network model to train
-        train_loader: DataLoader for training data
-        criterion: Loss function
-        optimizer: Optimization algorithm
-        device: Device to train on (CPU or GPU)
-        epochs: Number of training epochs
-        
-    Returns:
-        model: Trained model
-        losses: List of loss values per epoch
-        training_time: Total training time in seconds
-    """
     model.train()  # Set model to training mode
     losses = []
     start_time = time.time()
@@ -181,17 +122,6 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs=10):
 
 
 def evaluate_model(model, test_loader, device):
-    """
-    Evaluate the model
-    
-    Args:
-        model: The neural network model to evaluate
-        test_loader: DataLoader for test data
-        device: Device to evaluate on (CPU or GPU)
-        
-    Returns:
-        accuracy: Classification accuracy on test data
-    """
     model.eval()  # Set model to evaluation mode
     correct = 0
     total = 0
@@ -217,16 +147,6 @@ def evaluate_model(model, test_loader, device):
 
 
 def run_experiment(data_type='digits', iterations=5):
-    """
-    Run experiment with different percentages of training data
-    
-    Args:
-        data_type: Type of data to use ('digits' or 'faces')
-        iterations: Number of iterations for each training percentage
-        
-    Returns:
-        Dictionary containing experiment results
-    """
     train_percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
     # Set random seed for reproducibility
@@ -328,16 +248,6 @@ def run_experiment(data_type='digits', iterations=5):
 
 
 def plot_results(train_percentages, training_times, accuracies, accuracy_stds, data_type):
-    """
-    Plot training time and accuracy results
-    
-    Args:
-        train_percentages: List of training data percentages
-        training_times: List of average training times
-        accuracies: List of average accuracies
-        accuracy_stds: List of accuracy standard deviations
-        data_type: Type of data ('digits' or 'faces')
-    """
     percentages = [p * 100 for p in train_percentages]
     
     plt.figure(figsize=(12, 5))
@@ -360,20 +270,16 @@ def plot_results(train_percentages, training_times, accuracies, accuracy_stds, d
     
     # Save and display the figure
     plt.tight_layout()
-    plt.savefig(f'{data_type}_pytorch_results.png')
+    plt.savefig(f'extras/results/{data_type}_pytorch_results.png')
     plt.show()
 
 
 def main():
-    """Main function to run the experiment"""
     print("PyTorch Neural Network for Image Classification")
     
-    # Check if data directory exists
     if not os.path.exists('data'):
-        print("Error: 'data' directory not found.")
-        
+        print("Error: 'data' directory not found.")   
         return
-    
     # Run experiment for digits
     print("\n=== Digit Classification ===")
     digit_results = run_experiment(data_type='digits')
@@ -383,7 +289,6 @@ def main():
     face_results = run_experiment(data_type='faces')
     
     print("\nExperiments completed!")
-
 
 if __name__ == "__main__":
     main()
