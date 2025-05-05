@@ -74,22 +74,54 @@ class Perceptron:
     def predict(self, X):
         return np.argmax(X @ self.weights.T, axis=1)
 
-def test_perceptron(name, folder, img_size, num_classes, n_train=1000):
-    print(f"\n--- Perceptron Test: {name} ---")
+def run_perceptron_experiment(name, folder, img_size, num_classes):
     X_train, y_train, X_test, y_test = load_data(folder, *img_size)
 
-    if len(X_train) > n_train:
-        X_train, y_train = X_train[:n_train], y_train[:n_train]
+    portions = [0.1 * i for i in range(1, 11)]
+    mean_acc, std_acc, times = [], [], []
 
-    model = Perceptron(X_train.shape[1], num_classes)
-    model.train(X_train, y_train)
+    for p in portions:
+        accs = []
+        total_time = 0
+        for _ in range(5):  # 5 trials per portion
+            idx = np.random.choice(len(X_train), int(p * len(X_train)), replace=False)
+            X_sub, y_sub = X_train[idx], y_train[idx]
 
-    y_pred = model.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"Test Accuracy on {name}: {acc * 100:.2f}%")
+            model = Perceptron(X_sub.shape[1], num_classes)
+            start = time.time()
+            model.train(X_sub, y_sub)
+            total_time += time.time() - start
+
+            y_pred = model.predict(X_test)
+            accs.append(accuracy_score(y_test, y_pred))
+
+        mean_acc.append(np.mean(accs))
+        std_acc.append(np.std(accs))
+        times.append(total_time / 5)
+
+    # Plot results
+    x_vals = [int(p * 100) for p in portions]
+
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(x_vals, times, 'bo-', label='Training Time')
+    plt.xlabel("Percentage of Training Data (%)")
+    plt.ylabel("Training Time (s)")
+    plt.title(f"Training Time vs. Training Data Size ({name.lower()})")
+
+    plt.subplot(1, 2, 2)
+    plt.errorbar(x_vals, mean_acc, yerr=std_acc, fmt='g-', ecolor='black', capsize=4)
+    plt.xlabel("Percentage of Training Data (%)")
+    plt.ylabel("Accuracy")
+    plt.title(f"Accuracy vs. Training Data Size ({name.lower()})")
+
+    plt.tight_layout()
+    plt.savefig(f"perceptron_{name.lower()}_results.png")
+    plt.show()
 
 if __name__ == "__main__":
     test_dataset("Digits", "data/digitdata", (28, 28))
     test_dataset("Faces", "data/facedata", (60, 70))
-    test_perceptron("Digits", "data/digitdata", (28, 28), num_classes=10)
-    test_perceptron("Faces", "data/facedata", (60, 70), num_classes=2)
+    run_perceptron_experiment("Digits", "data/digitdata", (28, 28), num_classes=10)
+    run_perceptron_experiment("Faces", "data/facedata", (60, 70), num_classes=2)
