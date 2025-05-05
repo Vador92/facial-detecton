@@ -6,7 +6,7 @@ import time
 import matplotlib.pyplot as plt
 import random
 import os
-from torch.utils.data import Dataset, DataLoader, random_split, Subset
+from torch.utils.data import Dataset, DataLoader, Subset
 
 class ImageDataset(Dataset):
     def __init__(self, data, labels):
@@ -19,33 +19,23 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx]
 
-
 class ThreeLayerNN(nn.Module):
     def __init__(self, input_size, hidden1_size, hidden2_size, output_size):
         super(ThreeLayerNN, self).__init__()
         
-        # First hidden layer
         self.layer1 = nn.Linear(input_size, hidden1_size)
         self.activation1 = nn.ReLU()
         
-        # Second hidden layer
         self.layer2 = nn.Linear(hidden1_size, hidden2_size)
         self.activation2 = nn.ReLU()
         
-        # Output layer (no activation - will be handled by loss function)
         self.output_layer = nn.Linear(hidden2_size, output_size)
         
     def forward(self, x):
-        # Apply first hidden layer and activation
         x = self.activation1(self.layer1(x))
-        
-        # Apply second hidden layer and activation
         x = self.activation2(self.layer2(x))
-        
-        # Apply output layer (no activation applied here)
         x = self.output_layer(x)
         return x
-
 
 def load_data(folder_path, img_width, img_height):
     def parse_img(lines):
@@ -64,7 +54,6 @@ def load_data(folder_path, img_width, img_height):
         test_img_file = "facedatatest"
         test_lbl_file = "facedatatestlabels"
     
-    # Load raw data from files
     with open(os.path.join(folder_path, train_img_file), 'r') as f:
         raw_imgs = f.readlines()
     with open(os.path.join(folder_path, train_lbl_file), 'r') as f:
@@ -74,161 +63,125 @@ def load_data(folder_path, img_width, img_height):
     with open(os.path.join(folder_path, test_lbl_file), 'r') as f:
         test_labels = [int(l.strip()) for l in f.readlines()]
     
-    # Parse raw images into binary pixel values
     train_imgs = [parse_img(raw_imgs[i:i+img_height]) for i in range(0, len(raw_imgs), img_height)]
     test_imgs = [parse_img(raw_test_imgs[i:i+img_height]) for i in range(0, len(raw_test_imgs), img_height)]
     
     return np.array(train_imgs), np.array(train_labels), np.array(test_imgs), np.array(test_labels)
 
-
 def train_model(model, train_loader, criterion, optimizer, device, epochs=10):
-    model.train()  # Set model to training mode
+    model.train() 
     losses = []
     start_time = time.time()
     
     for epoch in range(epochs):
         running_loss = 0.0
         
-        # Iterate over mini-batches
         for inputs, targets in train_loader:
-            # Move data to device (CPU/GPU)
             inputs, targets = inputs.to(device), targets.to(device)
-            
-            # Zero the gradients from previous batch
             optimizer.zero_grad()
             
-            # Forward pass
             outputs = model(inputs)
             loss = criterion(outputs, targets)
+        
+            loss.backward()      
+            optimizer.step()     
             
-            # Backward pass and optimization
-            loss.backward()      # Compute gradients
-            optimizer.step()     # Update weights
-            
-            # Accumulate batch loss
             running_loss += loss.item()
             
-        # Calculate average loss for the epoch
         epoch_loss = running_loss / len(train_loader)
         losses.append(epoch_loss)
         
-        # Print progress every 5 epochs
         if (epoch + 1) % 5 == 0:
             print(f'Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}')
     
-    # Calculate total training time
     training_time = time.time() - start_time
     return model, losses, training_time
 
-
 def evaluate_model(model, test_loader, device):
-    model.eval()  # Set model to evaluation mode
+    model.eval()
     correct = 0
     total = 0
     
-    # Disable gradient calculation for efficiency
     with torch.no_grad():
         for inputs, targets in test_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             
-            # Forward pass
             outputs = model(inputs)
             
-            # Get predicted class (highest probability)
             _, predicted = torch.max(outputs.data, 1)
             
-            # Count correct predictions
             total += targets.size(0)
             correct += (predicted == targets).sum().item()
     
-    # Calculate accuracy
     accuracy = correct / total
     return accuracy
-
 
 def run_experiment(data_type='digits', iterations=5):
     train_percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
-    # Set random seed for reproducibility
     torch.manual_seed(42)
     np.random.seed(42)
     random.seed(42)
     
-    # Set device (GPU if available, otherwise CPU)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Load data based on data type
     if data_type == 'digits':
         folder_path = 'data/digitdata'
         img_width, img_height = 28, 28
         train_data, train_labels, test_data, test_labels = load_data(folder_path, img_width, img_height)
         input_size = img_width * img_height  # 28x28 = 784 input features
-        output_size = 10  # 10 digits (0-9)
-    else:  # faces
+        output_size = 10  
+    else: 
         folder_path = 'data/facedata'
         img_width, img_height = 60, 70
         train_data, train_labels, test_data, test_labels = load_data(folder_path, img_width, img_height)
-        input_size = img_width * img_height  # 60x70 = 4200 input features
-        output_size = 2  # Binary classification (face or not face)
+        input_size = img_width * img_height
+        output_size = 2 
     
-    # Create datasets
     train_dataset = ImageDataset(train_data, train_labels)
     test_dataset = ImageDataset(test_data, test_labels)
     
-    # Model hyperparameters
     hidden1_size = 128
     hidden2_size = 64
     batch_size = 32
     learning_rate = 0.001
     epochs = 20
     
-    # Results storage
     training_times = []
     accuracies = []
     accuracy_stds = []
     
-    # Main experiment loop
     for percentage in train_percentages:
         print(f"\nTraining with {percentage*100}% of the training data")
         
-        # Calculate number of training examples to use
         n_train = int(len(train_dataset) * percentage)
         
-        # Results for current percentage
         cur_times = []
         cur_accuracies = []
         
-        # Run multiple iterations with different random samples
         for iteration in range(iterations):
             print(f"Iteration {iteration+1}/{iterations}")
             
-            # Randomly sample training data
             indices = torch.randperm(len(train_dataset))[:n_train]
             sampled_train_dataset = Subset(train_dataset, indices)
             
-            # Create data loaders
             train_loader = DataLoader(sampled_train_dataset, batch_size=batch_size, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=batch_size)
             
-            # Initialize model
             model = ThreeLayerNN(input_size, hidden1_size, hidden2_size, output_size).to(device)
             
-            # Loss function and optimizer
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             
-            # Train model
             _, _, training_time = train_model(model, train_loader, criterion, optimizer, device, epochs)
             cur_times.append(training_time)
             
-            # Evaluate model
             accuracy = evaluate_model(model, test_loader, device)
             cur_accuracies.append(accuracy)
             
             print(f"Accuracy: {accuracy:.4f}, Training time: {training_time:.2f}s")
         
-        # Calculate and store average results
         training_times.append(np.mean(cur_times))
         accuracies.append(np.mean(cur_accuracies))
         accuracy_stds.append(np.std(cur_accuracies))
@@ -236,7 +189,6 @@ def run_experiment(data_type='digits', iterations=5):
         print(f"Average accuracy: {np.mean(cur_accuracies):.4f} ± {np.std(cur_accuracies):.4f}")
         print(f"Average training time: {np.mean(cur_times):.2f}s")
     
-    # Plot results
     plot_results(train_percentages, training_times, accuracies, accuracy_stds, data_type)
     
     return {
@@ -246,13 +198,11 @@ def run_experiment(data_type='digits', iterations=5):
         'accuracy_stds': accuracy_stds
     }
 
-
 def plot_results(train_percentages, training_times, accuracies, accuracy_stds, data_type):
     percentages = [p * 100 for p in train_percentages]
     
     plt.figure(figsize=(12, 5))
     
-    # Plot training time
     plt.subplot(1, 2, 1)
     plt.plot(percentages, training_times, 'o-', color='blue')
     plt.xlabel('Percentage of Training Data (%)')
@@ -260,7 +210,6 @@ def plot_results(train_percentages, training_times, accuracies, accuracy_stds, d
     plt.title(f'Training Time vs. Training Data Size ({data_type})')
     plt.grid(True)
     
-    # Plot accuracy with error bars (± standard deviation)
     plt.subplot(1, 2, 2)
     plt.errorbar(percentages, accuracies, yerr=accuracy_stds, fmt='o-', color='green', capsize=5)
     plt.xlabel('Percentage of Training Data (%)')
@@ -268,11 +217,9 @@ def plot_results(train_percentages, training_times, accuracies, accuracy_stds, d
     plt.title(f'Accuracy vs. Training Data Size ({data_type})')
     plt.grid(True)
     
-    # Save and display the figure
     plt.tight_layout()
     plt.savefig(f'extras/results/{data_type}_pytorch_results.png')
     plt.show()
-
 
 def main():
     print("PyTorch Neural Network for Image Classification")
@@ -280,13 +227,10 @@ def main():
     if not os.path.exists('data'):
         print("Error: 'data' directory not found.")   
         return
-    # Run experiment for digits
     print("\n=== Digit Classification ===")
-    digit_results = run_experiment(data_type='digits')
-    
-    # Run experiment for faces
+    run_experiment(data_type='digits')
     print("\n=== Face Classification ===")
-    face_results = run_experiment(data_type='faces')
+    run_experiment(data_type='faces')
     
     print("\nExperiments completed!")
 

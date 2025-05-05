@@ -51,7 +51,6 @@ class ImprovedNeuralNetwork:
         
         self.learning_rate = learning_rate
         
-        # For momentum
         self.velocity_w1 = np.zeros_like(self.weights1)
         self.velocity_b1 = np.zeros_like(self.bias1)
         self.velocity_w2 = np.zeros_like(self.weights2)
@@ -67,19 +66,16 @@ class ImprovedNeuralNetwork:
         return np.where(x > 0, 1, 0)
     
     def softmax(self, x):
-        exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))  # Subtract max for numerical stability
+        exp_x = np.exp(x - np.max(x, axis=1, keepdims=True)) 
         return exp_x / np.sum(exp_x, axis=1, keepdims=True)
     
     def forward(self, X):
-        # First hidden layer with ReLU
         self.z1 = np.dot(X, self.weights1) + self.bias1
         self.a1 = self.relu(self.z1)
         
-        # Second hidden layer with ReLU
         self.z2 = np.dot(self.a1, self.weights2) + self.bias2
         self.a2 = self.relu(self.z2)
         
-        # Output layer with softmax
         self.z3 = np.dot(self.a2, self.weights3) + self.bias3
         self.a3 = self.softmax(self.z3)
         
@@ -92,9 +88,7 @@ class ImprovedNeuralNetwork:
         y_one_hot[np.arange(batch_size), y] = 1
         
         delta3 = output - y_one_hot
-        
         delta2 = np.dot(delta3, self.weights3.T) * self.relu_derivative(self.z2)
-        
         delta1 = np.dot(delta2, self.weights2.T) * self.relu_derivative(self.z1)
         
         dW3 = np.dot(self.a2.T, delta3) / batch_size
@@ -119,11 +113,9 @@ class ImprovedNeuralNetwork:
         self.bias1 += self.velocity_b1
     
     def train(self, X, y, epochs=100, batch_size=32, verbose=True):
-        num_samples = X.shape[0]
-        losses = []
+        num_samples, losses = X.shape[0], []
         
         for epoch in range(epochs):
-            # Shuffle data
             indices = np.random.permutation(num_samples)
             X_shuffled = X[indices]
             y_shuffled = y[indices]
@@ -152,25 +144,18 @@ class ImprovedNeuralNetwork:
         return losses
     
     def predict(self, X):
-        output = self.forward(X)
-        return np.argmax(output, axis=1)
+        return np.argmax(self.forward(X), axis=1)
     
     def evaluate(self, X, y):
-        predictions = self.predict(X)
-        return accuracy_score(y, predictions)
+        return accuracy_score(y, self.predict(X))
 
 def test_neural_network(name, folder, img_size, num_classes, training_percentages=None):
-    if training_percentages is None:
-        training_percentages = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    if training_percentages is None: training_percentages = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     
     print(f"\n--- Improved Neural Network Test: {name} ---")
     
     X_train, y_train, X_test, y_test = load_data(folder, *img_size)
-    
-    # Results storage
-    accuracies = []
-    training_times = []
-    std_devs = []
+    accuracies, training_times, std_devs = [], [], []
     
     for percentage in training_percentages:
         print(f"\nTraining with {percentage}% of data")
@@ -212,7 +197,6 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
             
             print(f"  Run {run+1}: Accuracy = {accuracy:.4f}, Training time = {train_time:.2f}s")
         
-        # Calculate statistics
         mean_accuracy = np.mean(run_accuracies)
         std_accuracy = np.std(run_accuracies)
         mean_time = np.mean(run_times)
@@ -224,10 +208,8 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
         print(f"Average accuracy: {mean_accuracy:.4f} ± {std_accuracy:.4f}")
         print(f"Average training time: {mean_time:.2f}s")
     
-    # Plot results
     plt.figure(figsize=(12, 5))
     
-    # Accuracy plot
     plt.subplot(1, 2, 2)
     plt.errorbar(training_percentages, np.array(accuracies) * 100, yerr=np.array(std_devs) * 100, capsize=5)
     plt.xlabel('Training Data Percentage (%)')
@@ -251,7 +233,7 @@ def test_neural_network(name, folder, img_size, num_classes, training_percentage
 
 if __name__ == "__main__":
     # digits dataset
-    digits_results = test_neural_network("Digits", "data/digitdata", (28, 28), 10)
+    test_neural_network("Digits", "data/digitdata", (28, 28), 10)
     
     # faces dataset
-    faces_results = test_neural_network("Faces", "data/facedata", (60, 70), 2)
+    test_neural_network("Faces", "data/facedata", (60, 70), 2)
